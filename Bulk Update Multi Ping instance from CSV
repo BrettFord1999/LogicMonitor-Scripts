@@ -1,0 +1,109 @@
+<#
+Things that need to be statically changed: 
+
+the csv import, the csv should have the headers or "name", "IP" and "description"
+
+the device ID, here it's 4034
+
+the datasource ID , in this case it's 29587
+
+next steps for this are to functionize the script and make it more readable/easier to manage and update
+#>
+
+
+<# Use TLS 1.2 #> 
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 
+<# account info #> 
+$id = '' 
+$key = '' 
+$company = ''
+
+
+$httpVerb = 'GET' 
+$queryParams = '?size=1000' 
+$resourcePath = '/device/devices/4034/devicedatasources/29587/instances' 
+$data = ''
+$url = 'https://' + $company + '.logicmonitor.com/santaba/rest' + $resourcePath + $queryParams 
+$epoch = [Math]::Round((New-TimeSpan -start (Get-Date -Date "1/1/1970") -end (Get-Date).ToUniversalTime()).TotalMilliseconds)  
+$requestVars = $httpVerb + $epoch + $data + $resourcePath   
+$hmac = New-Object System.Security.Cryptography.HMACSHA256 
+$hmac.Key = [Text.Encoding]::UTF8.GetBytes($key) 
+$signatureBytes = $hmac.ComputeHash([Text.Encoding]::UTF8.GetBytes($requestVars)) 
+$signatureHex = [System.BitConverter]::ToString($signatureBytes) -replace '-' 
+$signature = [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($signatureHex.ToLower())) 
+$auth = 'LMv1 ' + $id + ':' + $signature + ':' + $epoch 
+$headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]" 
+$headers.Add("Authorization",$auth) 
+$headers.Add("Content-Type",'application/json')  
+$response = Invoke-RestMethod -Uri $url -Method $httpVerb -Header $headers #-Body $data 
+$response 
+$status = $response.status 
+$body = $response.data|ConvertTo-Json |out-file C:\cabs\logicmonitor.json 
+Write-Host "Status:$status" 
+Write-Host "Response:$body" 
+#This pulls the list of instances 
+$instancearray = @() 
+$response.data.items |ForEach-Object { 
+$id = $_.id 
+$httpVerb = 'GET' 
+$queryParams = '?size=1000' 
+$resourcePath = "/device/devices/4034/devicedatasources/29587/instances/$id" 
+$data = '' 
+$url = 'https://' + $company + '.logicmonitor.com/santaba/rest' + $resourcePath + $queryParams 
+$epoch = [Math]::Round((New-TimeSpan -start (Get-Date -Date "1/1/1970") -end (Get-Date).ToUniversalTime()).TotalMilliseconds) 
+$requestVars = $httpVerb + $epoch + $data + $resourcePath  
+$hmac = New-Object System.Security.Cryptography.HMACSHA256 
+$hmac.Key = [Text.Encoding]::UTF8.GetBytes($key) 
+$signatureBytes = $hmac.ComputeHash([Text.Encoding]::UTF8.GetBytes($requestVars)) 
+$signatureHex = [System.BitConverter]::ToString($signatureBytes) -replace '-' 
+$signature = [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($signatureHex.ToLower())) 
+$auth = 'LMv1 ' + $id + ':' + $signature + ':' + $epoch 
+$headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]" 
+$headers.Add("Authorization",$auth) 
+$headers.Add("Content-Type",'application/json') 
+$response1 = Invoke-RestMethod -Uri $url -Method $httpVerb -Header $headers #-Body $data 
+$response1 
+$status = $response1.status 
+$body = $response1.data|ConvertTo-Json |out-file C:\cabs\logicmonitor.json 
+Write-Host "Status:$status" 
+Write-Host "Response:$body" 
+$instancearray += $response1.data 
+} 
+$csv = import-csv C:\cabs\LMUpdate.csv 
+$instancearray | ForEach-Object { 
+$instanceid      = $_.id 
+$instancedisplay =  $_.displayName 
+$instanceIP      = $_.wildValue 
+    $csv | ForEach-Object { 
+         
+            $CSVname        = $_.name 
+            $CSVip          = $_.IP 
+            $CSVdescription = $_.description 
+            Write-Output $csvname $CSVip $CSVdescription 
+             
+             
+             
+        if ($CSVname -eq $instancedisplay){ 
+ 
+$httpVerb = 'PATCH' 
+$resourcePath = "/device/devices/4034/devicedatasources/29587/instances/$instanceid" 
+$queryParams = '?patchFields=description,wildValue&opType=replace' 
+$data = '{"description":"' + $CSVdescription + '","wildValue":"' + $CSVip + '"}'       
+$url = 'https://' + $company + '.logicmonitor.com/santaba/rest' + $resourcePath + $queryParams 
+$epoch = [Math]::Round((New-TimeSpan -start (Get-Date -Date "1/1/1970") -end (Get-Date).ToUniversalTime()).TotalMilliseconds)  
+$requestVars = $httpVerb + $epoch + $data + $resourcePath 
+$hmac = New-Object System.Security.Cryptography.HMACSHA256 
+$hmac.Key = [Text.Encoding]::UTF8.GetBytes($key) 
+$signatureBytes = $hmac.ComputeHash([Text.Encoding]::UTF8.GetBytes($requestVars)) 
+$signatureHex = [System.BitConverter]::ToString($signatureBytes) -replace '-' 
+$signature = [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($signatureHex.ToLower()))  
+$auth = 'LMv1 ' + $id + ':' + $signature + ':' + $epoch 
+$headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]" 
+$headers.Add("Authorization",$auth) 
+$headers.Add("Content-Type",'application/json') 
+$headers.Add("x-version",3) 
+$response3 = Invoke-RestMethod -Uri $url -Method $httpVerb -Header $headers -Body $data 
+$response3   
+        } 
+        } 
+}
