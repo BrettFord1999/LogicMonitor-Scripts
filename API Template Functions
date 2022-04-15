@@ -1,0 +1,58 @@
+#Logicmonitor Powershell API Templates
+
+#POST
+
+function POST-ApiCall { 
+Param ( 
+[Parameter(Mandatory=$true)][string]$resourcepath,
+[Parameter(Mandatory=$true)][string]$data, 
+[Parameter(Mandatory=$true)][string]$ID, 
+[Parameter(Mandatory=$true)][string]$Key, 
+[Parameter(Mandatory=$true)][string]$Company 
+)
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $httpVerb = 'POST'
+    $url = "https://$Company.logicmonitor.com/santaba/rest$resourcePath"  
+    $epoch = [Math]::Round((New-TimeSpan -start (Get-Date -Date "1/1/1970") -end (Get-Date).ToUniversalTime()).TotalMilliseconds)  
+    $requestVars = $httpVerb + $epoch + $data + $resourcePath  
+    $hmac = New-Object System.Security.Cryptography.HMACSHA256  
+    $hmac.Key = [Text.Encoding]::UTF8.GetBytes($Key)  
+    $signatureBytes = $hmac.ComputeHash([Text.Encoding]::UTF8.GetBytes($requestVars))  
+    $signatureHex = [System.BitConverter]::ToString($signatureBytes) -replace '-'  
+    $signature = [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($signatureHex.ToLower()))  
+    $auth = 'LMv1 ' + $ID + ':' + $signature + ':' + $epoch  
+    $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"  
+    $headers.Add("Authorization",$auth)  
+    $headers.Add("Content-Type",'application/json')
+    $headers.Add("x-version",3)
+    $response = Invoke-RestMethod -Uri $url -Method $httpVerb -Body $data -Header $headers   
+    $response 
+}
+
+#GET
+
+function POST-ApiCall { 
+Param ( 
+[Parameter(Mandatory=$true)][string]$resourcepath, 
+[Parameter(Mandatory=$true)][string]$ID, 
+[Parameter(Mandatory=$true)][string]$Key, 
+[Parameter(Mandatory=$true)][string]$Company
+) 
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $httpVerb = 'GET' 
+    $url = "https://$Company.logicmonitor.com/santaba/rest$resourcePath"  
+    $epoch = [Math]::Round((New-TimeSpan -start (Get-Date -Date "1/1/1970") -end (Get-Date).ToUniversalTime()).TotalMilliseconds)  
+    $requestVars = $httpVerb + $epoch + $resourcePath  
+    $hmac = New-Object System.Security.Cryptography.HMACSHA256  
+    $hmac.Key = [Text.Encoding]::UTF8.GetBytes($Key)  
+    $signatureBytes = $hmac.ComputeHash([Text.Encoding]::UTF8.GetBytes($requestVars))  
+    $signatureHex = [System.BitConverter]::ToString($signatureBytes) -replace '-'  
+    $signature = [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($signatureHex.ToLower()))  
+    $auth = 'LMv1 ' + $ID + ':' + $signature + ':' + $epoch  
+    $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"  
+    $headers.Add("Authorization",$auth)  
+    $headers.Add("x-version",3) 
+    $headers.Add("Content-Type",'application/json')  
+    $response = Invoke-RestMethod -Uri $url -Method $httpVerb -Header $headers
+    $response  
+} 
