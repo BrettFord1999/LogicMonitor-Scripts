@@ -1,0 +1,16 @@
+$key = '' |convertto-securestring -AsPlainText -force   
+$id = ''
+$company
+$alerts = Get-LogicMonitorAlert -AccessId $id -AccessKey $key -AccountName $company 
+foreach ($alert in $alerts) { 
+if ($alert.instancename -eq 'HostStatus'){ 
+    $currentdate = Get-Date 
+    $Date=(Get-Date 01.01.1970)+([System.TimeSpan]::fromseconds($alert.startepoch)) 
+    $Date =  $Date.AddDays(30) 
+        if ($currentdate -ge $Date){ 
+            $devices = Get-LogicMonitorDevice -accessid $id -accesskey $key -AccountName $company -Id $alert.monitorobjectid 
+            $devices.displayname 
+            write-output "last seen " $date.adddays(-30) 
+                   foreach( $device in $devices ) { 
+                   Remove-LogicMonitorDevice -AccessId $id -AccessKey $key -AccountName $company -id $device.id 
+        }}}}
