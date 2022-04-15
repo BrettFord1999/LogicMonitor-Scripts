@@ -1,0 +1,202 @@
+################################################################################################
+#Parameter and functions                                                                       #
+################################################################################################
+Param ( 
+[Parameter(Mandatory=$true)][string]$CustomerName, 
+[Parameter(Mandatory=$true)][string]$ID, 
+[Parameter(Mandatory=$true)][string]$Key, 
+[Parameter(Mandatory=$true)][string]$Company, 
+[Parameter(Mandatory=$true)][string]$ConnectWiseCompanyID 
+) 
+
+
+function Call-API { 
+Param ( 
+[Parameter(Mandatory=$true)][string]$httpVerb, 
+[Parameter(Mandatory=$true)][string]$resourcepath, 
+[Parameter(Mandatory=$true)][string]$data, 
+[Parameter(Mandatory=$true)][string]$ID, 
+[Parameter(Mandatory=$true)][string]$Key, 
+[Parameter(Mandatory=$true)][string]$Company 
+) 
+    $url = "https://$Company.logicmonitor.com/santaba/rest$resourcePath"  
+    $epoch = [Math]::Round((New-TimeSpan -start (Get-Date -Date "1/1/1970") -end (Get-Date).ToUniversalTime()).TotalMilliseconds)  
+    $requestVars = $httpVerb + $epoch + $data + $resourcePath  
+    $hmac = New-Object System.Security.Cryptography.HMACSHA256  
+    $hmac.Key = [Text.Encoding]::UTF8.GetBytes($Key)  
+    $signatureBytes = $hmac.ComputeHash([Text.Encoding]::UTF8.GetBytes($requestVars))  
+    $signatureHex = [System.BitConverter]::ToString($signatureBytes) -replace '-'  
+    $signature = [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($signatureHex.ToLower()))  
+    $auth = 'LMv1 ' + $ID + ':' + $signature + ':' + $epoch  
+    $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"  
+    $headers.Add("Authorization",$auth)  
+    $headers.Add("Content-Type",'application/json')  
+    $response = Invoke-RestMethod -Uri $url -Method $httpVerb -Body $data -Header $headers   
+    $response  
+}
+
+function Call-CollectorGetAPI { 
+Param ( 
+[Parameter(Mandatory=$true)][string]$resourcepath, 
+[Parameter(Mandatory=$true)][string]$ID, 
+[Parameter(Mandatory=$true)][string]$Key, 
+[Parameter(Mandatory=$true)][string]$Company 
+) 
+    $httpVerb = 'GET' 
+    $url = "https://$Company.logicmonitor.com/santaba/rest$resourcePath"  
+    $epoch = [Math]::Round((New-TimeSpan -start (Get-Date -Date "1/1/1970") -end (Get-Date).ToUniversalTime()).TotalMilliseconds)  
+    $requestVars = $httpVerb + $epoch + $resourcePath  
+    $hmac = New-Object System.Security.Cryptography.HMACSHA256  
+    $hmac.Key = [Text.Encoding]::UTF8.GetBytes($Key)  
+    $signatureBytes = $hmac.ComputeHash([Text.Encoding]::UTF8.GetBytes($requestVars))  
+    $signatureHex = [System.BitConverter]::ToString($signatureBytes) -replace '-'  
+    $signature = [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($signatureHex.ToLower()))  
+    $auth = 'LMv1 ' + $ID + ':' + $signature + ':' + $epoch  
+    $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"  
+    $headers.Add("Authorization",$auth)  
+    $headers.Add("x-version",3) 
+    $headers.Add("Content-Type",'application/json')  
+    $response = Invoke-RestMethod -Uri $url -Method $httpVerb -Header $headers -OutFile C:\Logicmonitorinstallation\collectorInstall.exe 
+    $response  
+} 
+#Script starts here
+###################################################################################################
+#Check for Logicmonitor module, installs needed package providers and Powershell get if not found #
+###################################################################################################
+$KeySecure = convertto-securestring $Key -AsPlainText -force  
+
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+ 
+import-module LogicMonitor -ErrorAction SilentlyContinue
+Import-Module PowershellGet -ErrorAction SilentlyContinue
+
+if(get-module LogicMonitor) {$LMModule = $true} 
+    else {$LMModule = $false}
+
+if ($LMModule -eq $false){ 
+    Set-ExecutionPolicy RemoteSigned -Force 
+    if(Get-PackageProvider NuGet) {$NuGet = $true} 
+        else {$NuGet = $false}
+         
+    if ($Nuget -eq $false) {
+        Install-PackageProvider -Name NuGet -Force} 
+
+    if (Get-module PowershellGet) {$PSGet = $true} 
+        else {$PSGet = $false}
+
+    if ($PSGet -eq $false) {
+        Install-Module -Name PowerShellGet -Force}
+
+    $ErrorActionPreference = "SilentlyContinue" 
+    winrm set winrm/config/client/auth '@{Basic="true"}' 
+    $ErrorActionPreference = "Inquire" 
+    write-output 'Attempting to install LogicMonitor Powershell Module' 
+    Install-Module LogicMonitor -Force 
+    Import-Module LogicMonitor 
+}
+
+#################################################################################################
+# The parent id is set to our customer folder, this section builds out a set of default folders #
+#################################################################################################
+
+$Table = @{ 
+     
+    name = "$CustomerName"
+            parentId = 16
+            customProperties = @(
+                @{
+                    name = 'customer.name'
+                    value = "$CustomerName"
+
+                }
+            )
+        } 
+Add-LogicMonitorDeviceGroup -AccessId $ID -AccessKey $KeySecure -AccountName $Company -Properties $Table 
+$NewGroup = Get-LogicMonitorDeviceGroup -AccessId $ID -AccessKey $KeySecure -AccountName $Company -Name $CustomerName 
+$NewGroupID = $NewGroup.id
+
+#Add Device import group 
+$Table = @{name = "_Import Folder"; parentId = $NewGroupID} 
+Add-LogicMonitorDeviceGroup -AccessId $ID -AccessKey $KeySecure -AccountName $Company -Properties $Table
+
+#Add Windows Servers group
+$Table = @{ 
+     
+    name = "Windows Servers"
+            parentId = $NewGroupID
+            appliesTo = 'isWindows() and customer.name == ' + '"' + $CustomerName + '"'
+        } 
+Add-LogicMonitorDeviceGroup -AccessId $ID -AccessKey $KeySecure -AccountName $Company -Properties $Table
+
+#Add Linux Servers group 
+$Table = @{ 
+     
+    name = "Linux Servers"
+            parentId = $NewGroupID
+            appliesTo = 'isLinux() and customer.name == ' + '"' + $CustomerName + '"'
+        } 
+Add-LogicMonitorDeviceGroup -AccessId $ID -AccessKey $KeySecure -AccountName $Company -Properties $Table
+
+#Add network Device group 
+$Table = @{ 
+     
+    name = "Network Devices"
+            parentId = $NewGroupID
+            appliesTo = 'isNetwork() and customer.name == ' + '"' + $CustomerName + '"'
+        } 
+Add-LogicMonitorDeviceGroup -AccessId $ID -AccessKey $KeySecure -AccountName $Company -Properties $Table
+
+#Add Dead Device group 
+$Table = @{ 
+     
+    name = "Dead Devices"
+            parentId = $NewGroupID
+            appliesTo = 'system.hoststatus =="dead" and customer.name == ' + '"' + $CustomerName + '"'
+        } 
+Add-LogicMonitorDeviceGroup -AccessId $ID -AccessKey $KeySecure -AccountName $Company -Properties $Table
+
+#Add Collector Device group 
+$CollectorGroupName = "$CustomerName Collectors" 
+$Table = @{ 
+     
+    name = "$CollectorGroupName"
+            parentId = $NewGroupID
+            appliesTo = 'isCollectorDevice() and customer.name == ' + '"' + $CustomerName + '"'
+        } 
+Add-LogicMonitorDeviceGroup -AccessId $ID -AccessKey $KeySecure -AccountName $Company -Properties $Table 
+
+################################################################################################
+#add connectwiseID property to the top level customer folder                                   #
+################################################################################################
+ 
+$httpVerb = 'POST'  
+$resourcePath = "/device/groups/$NewGroupID/properties" 
+$data = '{"name":"connectwisev2.companyid","value":"' + $ConnectWiseCompanyID + '"}' 
+call-api -httpVerb $httpVerb -resourcepath $resourcePath -data $data -APIAccessID $ID -APIAccessKey $Key -AccountName $Company 
+
+################################################################################################
+#Collector creation and installation section                                                   #
+################################################################################################
+
+#Create the collector Group 
+$httpVerb = 'POST'  
+$resourcePath = '/setting/collectors/groups' 
+$data = '{"name":"' + $CustomerName + '"}' 
+$response = call-api -httpVerb $httpVerb -resourcepath $resourcePath -data $data -APIAccessID $ID -APIAccessKey $Key -AccountName $Company 
+$CollectorGroupID = $response.data.id
+
+#Create the collector 
+$CollectorName = $CustomerName + " Collector" 
+$httpVerb = 'POST'  
+$resourcePath = '/setting/collectors' 
+$data = '{"description":"' + $CollectorName + '","escalatingChainId":93,"collectorGroupId":"' + $CollectorGroupID + '"}' 
+$response = call-api -httpVerb $httpVerb -resourcepath $resourcePath -data $data -APIAccessID $ID -APIAccessKey $Key -AccountName $Company 
+$NewCollectorID = $response.data.id 
+
+#download and install the collector 
+mkdir C:\LogicMonitorInstallation\ -ErrorAction SilentlyContinue 
+cd C:\Logicmonitorinstallation\ 
+$httpVerb = 'GET'
+$ResourcePath = "/setting/collectors/$NewCollectorID/installers/Win64" 
+$response = Call-CollectorGetAPI -resourcepath $resourcePath -APIAccessID $ID -APIAccessKey $Key -AccountName $Company 
+.\collectorInstall.exe /q
