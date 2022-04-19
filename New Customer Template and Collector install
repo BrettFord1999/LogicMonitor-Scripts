@@ -105,7 +105,7 @@ $Table = @{
             parentId = 16
             customProperties = @(
                 @{
-                    name = 'c3ustomer.name'
+                    name = 'customer.name'
                     value = "$CustomerName"
 
                 }
