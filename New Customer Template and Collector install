@@ -105,7 +105,7 @@ $Table = @{
             parentId = 16
             customProperties = @(
                 @{
-                    name = 'customer.name'
+                    name = 'c3ustomer.name'
                     value = "$CustomerName"
 
                 }
@@ -122,9 +122,19 @@ Add-LogicMonitorDeviceGroup -AccessId $ID -AccessKey $KeySecure -AccountName $Co
 #Add Windows Servers group
 $Table = @{ 
      
+    name = "All Devices"
+            parentId = $NewGroupID
+            appliesTo = 'auto.company.id == ' + '"' + $CustomerName + '"'
+        } 
+Add-LogicMonitorDeviceGroup -AccessId $ID -AccessKey $KeySecure -AccountName $Company -Properties $Table
+
+
+#Add Windows Servers group
+$Table = @{ 
+     
     name = "Windows Servers"
             parentId = $NewGroupID
-            appliesTo = 'isWindows() and customer.name == ' + '"' + $CustomerName + '"'
+            appliesTo = 'isWindows() and auto.company.id == ' + '"' + $CustomerName + '"'
         } 
 Add-LogicMonitorDeviceGroup -AccessId $ID -AccessKey $KeySecure -AccountName $Company -Properties $Table
 
@@ -133,7 +143,7 @@ $Table = @{
      
     name = "Linux Servers"
             parentId = $NewGroupID
-            appliesTo = 'isLinux() and customer.name == ' + '"' + $CustomerName + '"'
+            appliesTo = 'isLinux() and auto.company.id == ' + '"' + $CustomerName + '"'
         } 
 Add-LogicMonitorDeviceGroup -AccessId $ID -AccessKey $KeySecure -AccountName $Company -Properties $Table
 
@@ -142,7 +152,7 @@ $Table = @{
      
     name = "Network Devices"
             parentId = $NewGroupID
-            appliesTo = 'isNetwork() and customer.name == ' + '"' + $CustomerName + '"'
+            appliesTo = 'isNetwork() and auto.company.id == ' + '"' + $CustomerName + '"'
         } 
 Add-LogicMonitorDeviceGroup -AccessId $ID -AccessKey $KeySecure -AccountName $Company -Properties $Table
 
@@ -151,7 +161,7 @@ $Table = @{
      
     name = "Dead Devices"
             parentId = $NewGroupID
-            appliesTo = 'system.hoststatus =="dead" and customer.name == ' + '"' + $CustomerName + '"'
+            appliesTo = 'system.hoststatus =="dead" and auto.company.id == ' + '"' + $CustomerName + '"'
         } 
 Add-LogicMonitorDeviceGroup -AccessId $ID -AccessKey $KeySecure -AccountName $Company -Properties $Table
 
@@ -161,7 +171,7 @@ $Table = @{
      
     name = "$CollectorGroupName"
             parentId = $NewGroupID
-            appliesTo = 'isCollectorDevice() and customer.name == ' + '"' + $CustomerName + '"'
+            appliesTo = 'isCollectorDevice() and auto.company.id == ' + '"' + $CustomerName + '"'
         } 
 Add-LogicMonitorDeviceGroup -AccessId $ID -AccessKey $KeySecure -AccountName $Company -Properties $Table 
 
