@@ -1,5 +1,5 @@
 <#
-Things that need to be statically changed: 
+Things that need to be changed: 
 
 the csv import, the csv should have the headers or "name", "IP" and "description"
 
